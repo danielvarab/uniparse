@@ -147,7 +147,7 @@ python scripts/run_dynet_kiperwasser.py --train TRAIN_FILE --dev DEV_FILE --test
 
 with `w.p.` and `n.p.` denoting 'with punctuation', 'no punctuation'. No punctuation follows the rule of excluding modifier tokens consisting entirely of unicode punctuation characters; this definition is standard in current research.
 
-*Note that currently these models must be trained, but we actively working on providing downloadable pretrained parameters.*
+*Note that these models must be trained. We are actively working on providing downloadable pretrained models.*
 
 
 ### PTB split
