@@ -160,7 +160,7 @@ Note that published model performances for systems we re-implement and distribut
 
 
 # Citation
-If you use UniParse, please cite our [https://www.aclweb.org/anthology/W19-6149](paper).
+If you use UniParse, please cite our [paper](https://www.aclweb.org/anthology/W19-6149).
 
 ```
 @inproceedings{varab-schluter-2019-uniparse,
