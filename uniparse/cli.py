@@ -19,7 +19,7 @@ VERSION = 0.2
 
 INCLUDED_MODELS = {
     "kiperwasser-dynet": uniparse.models.kiperwasser_dynet.DependencyParser,
-    "kiperwasser-pytorch": uniparse.models.kiperwasser_pytorch.DependencyParser
+    "kiperwasser-pytorch": uniparse.models.kiperwasser_pytorch.DependencyParser,
 }
 
 
@@ -202,4 +202,5 @@ def _run_model(_, args):
     print(">> Wrote predictions to conllu file %s" % out_file)
 
 
-main()
+if __name__ == "__main__":
+    main()
