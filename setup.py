@@ -67,4 +67,5 @@ setup(
 # remove c and build folder
 os.system("rm uniparse/decoders/*.c")
 os.system("rm uniparse/models/*.cpp")
+os.system("rm uniparse/models/*.c")
 os.system("rm -fr ./build/")
