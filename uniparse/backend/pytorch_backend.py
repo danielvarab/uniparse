@@ -1,6 +1,9 @@
-import torch
-import torch.optim as optim
+"""pytorch wrapper for uniparse."""
+
 import numpy as np
+import torch
+import torch.nn.functional as F
+import torch.optim as optim
 
 
 def generate_mask(shape, target):
@@ -30,7 +33,14 @@ class _PytorchLossFunctions(object):
 
     @staticmethod
     def crossentropy(x, pred_y, y, mask):
-        raise NotImplementedError()
+        batch_size, seq_len, d = x.shape
+        y[:, 0] = 0
+        
+        x = x.reshape((batch_size*seq_len, d))
+        y = torch.Tensor(y).reshape((batch_size*seq_len)).long()
+        loss = F.cross_entropy(x, y, reduction="none")
+
+        return sum(loss * torch.Tensor(mask).reshape(-1)) / batch_size
 
     @staticmethod  # actually used for labels
     def kipperwasser_hinge(x, pred_y, y, mask):
@@ -116,4 +126,3 @@ class PyTorchBackend(object):
     @staticmethod
     def renew_cg():
         pass
-
