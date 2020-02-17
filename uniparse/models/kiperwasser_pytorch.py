@@ -10,43 +10,28 @@ import torch.nn as nn
 from uniparse.utypes import Parser
 
 
-class BiRNN(nn.Module):
-    """BiLSTM pytorch implementation."""
-    def __init__(self, input_size, hidden_size, num_layers):
-        super(BiRNN, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
-
-    def forward(self, x):
-        """BiLSTM forward pass."""
-        # Set initial states
-        h0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_size)
-        c0 = torch.zeros(self.num_layers * 2, x.size(0), self.hidden_size)
-
-        # Forward propagate LSTM
-        # out: tensor of shape (batch_size, seq_length, hidden_size*2)
-        out, _ = self.lstm(x, (h0, c0))
-
-        # Decode the hidden state of the last time step
-        return out
-
-
 class DependencyParser(nn.Module, Parser):
-    """Class to encapsulate model parameters."""
+    """Kiperwasser and Goldberg."""
+
     def save_to_file(self, filename):
         torch.save(self.state_dict(), filename)
 
-    def load_from_file(self, filename: str) -> None:
+    def load_from_file(self, filename: str):
         self.load_state_dict(torch.load(filename))
 
-    def __init__(self, vocab):
+    def get_backend_name(self):
+        # override
+        return "pytorch"
+
+    def __init__(self, args, vocab):
         super().__init__()
 
-        upos_dim = 25
-        word_dim = 100
-        hidden_dim = 100
-        bilstm_out = (word_dim+upos_dim) * 2
+        upos_dim = args.upos_dim
+        word_dim = args.word_dim
+        hidden_dim = args.hidden_dim
+        bilstm_in = word_dim + upos_dim
+        bilstm_out = (word_dim + upos_dim) * 2
+        bilstm_layers = 2
 
         self.word_count = vocab.vocab_size
         self.upos_count = vocab.upos_size
@@ -57,7 +42,9 @@ class DependencyParser(nn.Module, Parser):
         self.wlookup = nn.Embedding(self.word_count, word_dim)
         self.tlookup = nn.Embedding(self.word_count, upos_dim)
 
-        self.deep_bilstm = BiRNN(word_dim+upos_dim, word_dim+upos_dim, 2)
+        self.deep_bilstm = nn.LSTM(
+            bilstm_in, bilstm_in, bilstm_layers, batch_first=True, bidirectional=True
+        )
 
         # edge encoding
         self.edge_head = nn.Linear(bilstm_out, hidden_dim)
@@ -72,10 +59,6 @@ class DependencyParser(nn.Module, Parser):
 
         # label scoring
         self.l_scorer = nn.Linear(hidden_dim, vocab.label_count, bias=True)
-
-    def get_backend_name(self):
-        return "pytorch"
-        # return "dynet"
 
     @staticmethod
     def _propability_map(matrix, dictionary):
@@ -99,14 +82,14 @@ class DependencyParser(nn.Module, Parser):
 
         words = torch.cat([word_embs, upos_embs], dim=-1)
 
-        word_exprs = self.deep_bilstm(words)
+        word_exprs, _ = self.deep_bilstm(words)
 
         word_h = self.edge_head(word_exprs)
         word_m = self.edge_modi(word_exprs)
 
         arc_score_list = []
         for i in range(n):
-            modifier_i = word_h[:, i, None, :] + word_m  # we would like have head major
+            modifier_i = word_h[:, i, :].unsqueeze(2) + word_m 
             modifier_i = torch.tanh(modifier_i)
             modifier_i_scores = self.e_scorer(modifier_i)
             arc_score_list.append(modifier_i_scores)

@@ -1,17 +1,16 @@
 """Model wrapper class for training and running a model."""
-import sys
+# import sys
 import time
-
 from tempfile import NamedTemporaryFile
 
 import numpy as np
 import sklearn.utils
+from tqdm import tqdm
 
 import uniparse.backend as backend_wrapper
+from uniparse.dataprovider import BucketBatcher, ScaledBatcher
 from uniparse.evaluate import evaluate_files
 from uniparse.util import write_predictions_to_file
-
-from uniparse.dataprovider import ScaledBatcher, BucketBatcher
 
 ERROR_MSG = ">> ERROR: can't import decoders. please run \
             'python setup.py build_ext --inplace' from the root directory"
@@ -64,8 +63,9 @@ class Model:
                 raise ValueError("optimizer doesn't exist")
 
             return optimizer_options[input_optimizer]
-        else:
-            return input_optimizer
+
+        # is already an instance of an optimizer.
+        return input_optimizer
 
     @staticmethod
     def _get_decoder(input_decoder):
@@ -83,7 +83,6 @@ class Model:
         if isinstance(input_loss, str):
             loss = self.backend.loss
             loss_options = {
-                # included for completeness
                 "crossentropy": (loss.crossentropy, loss.crossentropy),
                 "kiperwasser": (loss.hinge, loss.kipperwasser_hinge),
                 "hinge": (loss.hinge, loss.hinge),
@@ -99,9 +98,9 @@ class Model:
         if strategy == "bucket":
             dataprovider = BucketBatcher(samples, padding_token=self._vocab.PAD)
             idx, sentences = dataprovider.get_data(scale, shuffle)
-        elif strategy == "scaled_batch":
+        elif strategy == "scaled_batch":  # aka. aprox. batch
             dataprovider = ScaledBatcher(
-                samples, cluster_count=40, padding_token=self._vocab.PAD
+                samples, cluster_count=10, padding_token=self._vocab.PAD
             )
             idx, sentences = dataprovider.get_data(scale, shuffle)
         else:
@@ -122,6 +121,7 @@ class Model:
 
             words, lemmas, tags, chars = x_input
 
+            # TODO: remove this from model and have this done from "batcher"
             words = backend.input_tensor(words, dtype="int")
             tags = backend.input_tensor(tags, dtype="int")
             lemmas = backend.input_tensor(lemmas, dtype="int")
@@ -138,7 +138,9 @@ class Model:
 
         return predictions
 
-    def train(self, train, dev_file, dev, epochs, batch_size, callbacks=None, patience=-1):
+    def train(
+        self, train, dev_file, dev, epochs, batch_size, callbacks=None, patience=-1
+    ):
         """
         Train neural model.
 
@@ -147,7 +149,10 @@ class Model:
         callbacks = callbacks if callbacks else []
 
         if patience > -1:
-            print("> Training with patience (%d) for maximum of %d epochs" % (patience, epochs))
+            print(
+                "> Training with patience (%d) for maximum of %d epochs"
+                % (patience, epochs)
+            )
         else:
             print(f"> Training without patience for exactly {epochs} epochs")
 
@@ -168,11 +173,11 @@ class Model:
 
             print(f"> Epoch {epoch}")
             print("=====================")
-            for (x, y) in samples:
+            for (x, y) in tqdm(samples):
                 # renew graph
                 backend.renew_cg()
-
                 words, lemmas, tags, chars = x
+                print(words.shape)
                 gold_arcs, gold_rels = y
 
                 # PAD = 0; ROOT = 1; OOV = 2; UNK = 2
@@ -182,6 +187,7 @@ class Model:
                 num_tokens = int(np.sum(mask))
 
                 # This is necessary to satisfy compatibility across dl frameworks
+                # TODO: remove this from model and have this done from "batcher"
                 words = backend.input_tensor(words, dtype="int")
                 postags = backend.input_tensor(tags, dtype="int")
                 lemmas = backend.input_tensor(lemmas, dtype="int")
@@ -191,7 +197,7 @@ class Model:
                 )
 
                 arc_loss = self.arc_loss(arc_scores, arc_preds, gold_arcs, mask)
-                rel_loss = self.rel_loss(rel_scores, None, gold_rels, mask)
+                rel_loss = self.rel_loss(rel_scores, rel_preds, gold_rels, mask)
 
                 loss = arc_loss + rel_loss
                 loss_value = backend.get_scalar(loss)
@@ -216,11 +222,12 @@ class Model:
                 for callback in callbacks:
                     callback.on_batch_end(training_info)
 
-                values = (global_step, arc_accuracy, rel_accuracy, loss_value)
-                sys.stdout.write(
-                    "\r\rStep #%d: Acc: arc %.2f, rel %.2f, loss %.3f" % values
-                )
-                sys.stdout.flush()
+                # phasing out because of tqdm
+                # values = (global_step, arc_accuracy, rel_accuracy, loss_value)
+                # sys.stdout.write(
+                #     "\r\rStep #%d: Acc: arc %.2f, rel %.2f, loss %.3f" % values
+                # )
+                # sys.stdout.flush()
 
                 global_step += 1
 
@@ -262,6 +269,9 @@ class Model:
                 print()
 
         print(f">> Finished at epoch {epoch}")
+
+    def fit(self, *args, **kwargs):
+        return self.train(*args, **kwargs)
 
     def evaluate(self, test_file, test_data, batch_size):
         """

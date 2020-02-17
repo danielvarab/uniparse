@@ -41,7 +41,7 @@ def gen_pad_2d(x, padding_token):
     return buff
 
 
-def split(l: list, batch_length: int):
+def split(l, batch_length):
     return [l[i : i + batch_length] for i in range(0, len(l), batch_length)]
 
 
@@ -145,7 +145,7 @@ class ScaledBatcher:
         self._clusters = len_clusters
         self._indicies = index_clusters
 
-    def get_data(self, scale: int, shuffle=True):
+    def get_data(self, scale, shuffle=True):
         def compute_batch_size(x):
             cluster_size = len(x)
             n = max(len(t[0]) for t in x)
@@ -174,3 +174,71 @@ class VanillaBatcher(object):
 
     def get_data(self, batch_size, shuffle=True):
         raise NotImplementedError()
+
+
+def pad_sequence(samples, value, columns=None):
+    pass
+
+
+def _aprox(samples, max_bucket_count):
+    lengths = np.array([len(s[0]) for s in samples]).reshape(-1, 1)
+
+    kmeans = KMeans(max_bucket_count)
+    labels = kmeans.fit_predict(lengths)
+    sample_clusters, index_clusters = defaultdict(list), defaultdict(list)
+
+    for sample_id, (sample, n) in enumerate(zip(samples, labels)):
+        sample_clusters[n].append(sample)
+        index_clusters[n].append(sample_id)
+
+    return sample_clusters, index_clusters
+
+
+def _bucket(samples):
+
+    sample_clusters = defaultdict(list)
+    index_clusters = defaultdict(list)
+
+    # scan over dataset and add them to buckets of same length
+    for sample_id, sample in enumerate(samples):
+        words, *_ = sample
+        n = len(words)
+
+        sample_clusters[n].append(sample)
+        index_clusters[n].append(sample_id)
+
+    return sample_clusters, index_clusters
+
+
+# In UD: 0=form, 2=tag, 3=head, 4=rel
+# def _get_features(batch, padding, columns=[0, 2, 3, 4]):
+#     batch = []
+#     for sample in batch:
+#         for token in sample:
+#             for feature_idx in columns
+#     for feature_idx in columns:
+#         feature = [token[feature_idx] for token in sample]
+#         padded_feature = gen_pad_2d(feature, padding)
+#         batch.append(padded_feature)
+#     return batch
+
+
+
+def get_buckets(samples, style, batch_size, columns=None):
+    bucket_function = {"aprox": _aprox, "bucket": _bucket}[style]
+
+    X, X_idx = bucket_function(samples)
+
+    for n in X.keys():
+        bucket = X[n]
+        indicies = X_idx[n]
+
+        # shuffle
+        bucket, indicies = sklearn.utils.shuffle(bucket, indicies)
+
+        bucket_splits = split(bucket, batch_size)
+        indicies_splits = split(indicies, batch_size)
+
+        for sent in bucket:
+            features = _get_features(sent, 0)
+

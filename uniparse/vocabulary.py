@@ -1,9 +1,8 @@
 """Vocabulary module containing the Vocabulary class."""
 
-from collections import Counter
-
-import re
 import pickle
+import re
+from collections import Counter
 
 import numpy as np
 
@@ -40,7 +39,7 @@ class Vocabulary:
         match = re.match("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+", word)
         return "NUM" if match else word.lower()
 
-    def fit(self, input_file, pretrained_embeddings=None, min_occur_count=0):
+    def fit(self, input_file, pretrained_embeddings=None, min_freq=0):
         """Fit vocabulary on CONLLU file."""
         word_counter, lemma_set, tag_set, rel_set, char_set = self._collect_tokens(
             input_file
@@ -52,9 +51,9 @@ class Vocabulary:
         self._id2rel = ["<pad>", "root"]
         self._id2char = ["<pad>", "root", "<unk>"]
         for word, count in word_counter.most_common():
-            if count > min_occur_count:
+            if count > min_freq:
                 self._id2word.append(word)
-
+        
         # add dataset tokens
         self._id2char += list(char_set)
         self._id2lemma += list(lemma_set)
@@ -76,7 +75,7 @@ class Vocabulary:
         self._pret_file = None
         if pretrained_embeddings:
             self._pret_file = pretrained_embeddings
-            self._add_pret_words(pretrained_embeddings)
+            #self._add_pret_words(pretrained_embeddings)
 
         return self
 
@@ -174,10 +173,10 @@ class Vocabulary:
                 self._word2id[word] = offset + counter
                 counter += 1
 
-    def load_embedding(self, variance_normalize=False):
+    def load_embedding(self):
         """ load embeddings """
 
-        assert self._pret_file is not None, "no embedding to load...."
+        assert self._pret_file is not None, "No embedding file..."
 
         embs = [[]] * len(self._word2id.keys())
         vector = None
@@ -189,7 +188,9 @@ class Vocabulary:
                     continue
 
                 word, vector = line[0], line[1:]
-                # word_id = self._word2id[word]
+                word_index = self._word2id.get(word)
+                if word_index:
+                    embs[word_index] = vector
 
             print(f">> Done loading embeddings ({i})")
 
@@ -199,14 +200,10 @@ class Vocabulary:
                 embs[idx] = np.zeros(emb_size)
         pret_embs = np.array(embs, dtype=np.float32)
 
-        if variance_normalize:
-            pret_embs /= np.std(pret_embs)
-
         return pret_embs
 
     def tokenize_conll(self, file):
         """Maps string dataset to integer token lookups."""
-        # TODO: Rename to load_conllu
         return self._read_conll(file, tokenize=True)
 
     def _parse_conll_line(self, info, tokenize):
@@ -330,3 +327,5 @@ class Vocabulary:
     @property
     def rel_size(self):
         return len(self._rel2id)
+
+

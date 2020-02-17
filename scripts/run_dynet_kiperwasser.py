@@ -2,126 +2,81 @@
 
 import argparse
 
-from uniparse import Vocabulary, Model
+import uniparse.util
+from uniparse import Trainer, Vocabulary
 from uniparse.callbacks import ModelSaveCallback
+from uniparse.config import ParameterConfig, pprint_dict
 from uniparse.models.kiperwasser_dynet import DependencyParser
-from uniparse.util import write_predictions_to_file
-
-SUBPARSERS_HELP = "%(prog)s must be called with a command:"
-TRAIN_PARSER_HELP = "Train a dependency parser."
-EVAL_PARSER_HELP = "Evaluate dependency parser."
-RUN_PARSER_HELP = "Run dependency parser."
 
 
-def main():
-    """Set up command line parser."""
-    description = "CLI for training/evaluating/running Kiperwasser and Goldberg (2017)."
-    parser = argparse.ArgumentParser(description=description)
-
-    subparsers = parser.add_subparsers(help=SUBPARSERS_HELP, dest="train|dev|run")
-    subparsers.required = True
-
-    for subparsers_func in [_get_train_parser, _get_eval_model_parser, _get_run_parser]:
-        subparsers_func(subparsers)
-
-    # second parameter is unrecognized arguments
-    args, _ = parser.parse_known_args()
-    args.func(args)
-
-
-def _get_train_parser(subparsers):
+def get_train_parser(subparsers):
     """Create parser for the 'train' command."""
-    train_parser = subparsers.add_parser("train", help=EVAL_PARSER_HELP)
+    train_parser = subparsers.add_parser("train")
+    train_parser.add_argument("--config", action=ParameterConfig, required=True)
     train_parser.add_argument("--train", required=True)
     train_parser.add_argument("--dev", required=False)
     train_parser.add_argument("--model", required=True)
     train_parser.add_argument("--vocab", required=True)
-    train_parser.add_argument("--epochs", type=int, default=30)
-    train_parser.add_argument("--patience", type=int, default=3)
-    train_parser.add_argument("--batch-size", type=int, default=32)
-    train_parser.set_defaults(func=_train_model)
+    train_parser.set_defaults(_func=_train)
+
     return train_parser
 
 
-def _train_model(args):
-    train_file = args.train
-    dev_file = args.dev
-    epochs = args.epochs
-    vocab_dest = args.vocab
-    model_dest = args.model
-    batch_size = args.batch_size
-    embedding_file = None
-
-    # Disable patience if there is no dev. set
-    patience = args.patience if dev_file else -1
-
-    vocab = Vocabulary().fit(train_file, embedding_file)
-    word_embeddings = vocab.load_embedding() if embedding_file else None
+def _train(args):
+    vocab = Vocabulary().fit(args.train, args.embs)
+    word_embeddings = vocab.load_embedding() if args.embs else None
     if word_embeddings:
         print("> Embedding shape", word_embeddings.shape)
 
     # save vocab for reproducability later
-    print("> Saving vocabulary to", vocab_dest)
-    vocab.save(vocab_dest)
+    print("> Saving vocabulary to %s" % args.vocab)
+    vocab.save(args.vocab)
 
-    # prep data
-    print(">> Loading in data")
-    training_data = vocab.tokenize_conll(train_file)
-
-    dev_data = vocab.tokenize_conll(dev_file) if dev_file else None
+    # prepare data
+    training_data = vocab.tokenize_conll(args.train)
+    dev_data = vocab.tokenize_conll(args.dev) if args.dev else None
 
     # instantiate model
-    model = DependencyParser(vocab, word_embeddings)
-
-    # 'best' only saves models that improve results on the dev. set
-    # 'epoch' saves models on each epoch to a file appended with the epoch number
-    save_mode = "best" if dev_file else "epoch"
-    save_callback = ModelSaveCallback(model_dest, mode=save_mode)
-    callbacks = [save_callback]
+    model = DependencyParser(args, vocab, word_embeddings)
 
     # prep params
-    parser = Model(
+    trainer = Trainer(
         model,
         decoder="eisner",
         loss="kiperwasser",
         optimizer="adam",
-        strategy="bucket",
+        #strategy="bucket",
+        strategy="scaled_batch",
         vocab=vocab,
     )
 
-    parser.train(
+    trainer.train(
         training_data,
-        dev_file,
+        args.dev,
         dev_data,
-        epochs=epochs,
-        batch_size=batch_size,
-        callbacks=callbacks,
-        patience=patience,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        callbacks=[ModelSaveCallback(args.model)],
+        patience=args.patience,
     )
 
 
-def _get_eval_model_parser(subparsers):
-    eval_parser = subparsers.add_parser("eval", help=EVAL_PARSER_HELP)
-    eval_parser.add_argument("--filename", required=True)
-    eval_parser.add_argument("--model", required=True)
-    eval_parser.add_argument("--vocab", required=True)
-    eval_parser.add_argument("--batch-size", default=32)
+def get_eval_model_parser(subparsers):
+    parser = subparsers.add_parser("eval")
+    parser.add_argument("--config", action=ParameterConfig, required=True)
+    parser.add_argument("--test", required=True)
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--vocab", required=True)
 
-    eval_parser.set_defaults(func=_eval_model)
-    return eval_parser
+    parser.set_defaults(_func=eval_model)
+    return parser
 
 
-def _eval_model(args):
-    test_file = args.filename
-    vocab_file = args.vocab
-    model_file = args.model
-    batch_size = args.batch_size
-    word_embeddings = None
+def eval_model(args):
+    vocab = Vocabulary().load(args.vocab)
+    model = DependencyParser(args, vocab, embs=None)
 
-    vocab = Vocabulary().load(vocab_file)
-    model = DependencyParser(vocab, word_embeddings)
-
-    parser = Model(
+    trainer = Trainer(
         model,
         decoder="eisner",
         loss="kiperwasser",
@@ -130,39 +85,31 @@ def _eval_model(args):
         vocab=vocab,
     )
 
-    parser.load_from_file(model_file)
-    test_data = vocab.tokenize_conll(test_file)
-    metrics = parser.evaluate(test_file, test_data, batch_size=batch_size)
+    trainer.load_from_file(args.model)
+    test_data = vocab.tokenize_conll(args.test)
+    metrics = trainer.evaluate(args.test, test_data, args.batch_size)
 
-    keys, values = zip(*metrics.items())
-    print("\t".join(keys))
-    print("\t".join([str(round(v, 3)) for v in values]))
+    pprint_dict(metrics)
 
 
-def _get_run_parser(subparsers):
-    eval_parser = subparsers.add_parser("run", help=EVAL_PARSER_HELP)
-    eval_parser.add_argument("--filename", required=True)
-    eval_parser.add_argument("--output", required=True)
-    eval_parser.add_argument("--model", required=True)
-    eval_parser.add_argument("--vocab", required=True)
-    eval_parser.add_argument("--no-gold")
-    eval_parser.add_argument("--batch-size", default=32)
+def get_run_parser(subparsers):
+    parser = subparsers.add_parser("run")
+    parser.add_argument("--config", action=ParameterConfig, required=True)
+    parser.add_argument("--test", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--vocab", required=True)
+    parser.add_argument("--no-gold")
+    parser.add_argument("--batch-size", default=32)
 
-    eval_parser.set_defaults(func=_run_model)
-    return eval_parser
+    parser.set_defaults(_func=run_model)
+    return parser
 
 
-def _run_model(args):
-    run_file = args.filename
-    out_file = args.output
-    vocab_file = args.vocab
-    model_file = args.model
-    batch_size = args.batch_size
-    word_embeddings = None
-
-    vocab = Vocabulary().load(vocab_file)
-    model = DependencyParser(vocab, word_embeddings)
-    parser = Model(
+def run_model(args):
+    vocab = Vocabulary().load(args.vocab)
+    model = DependencyParser(args, vocab, embs=None)
+    parser = Trainer(
         model,
         decoder="eisner",
         loss="kiperwasser",
@@ -171,15 +118,37 @@ def _run_model(args):
         vocab=vocab,
     )
 
-    parser.load_from_file(model_file)
+    parser.load_from_file(args.model)
 
-    run_data = vocab.tokenize_conll(run_file)
-    predictions = parser.run(run_data, batch_size)
-    write_predictions_to_file(
-        predictions, reference_file=run_file, output_file=out_file, vocab=vocab
+    run_data = vocab.tokenize_conll(args.test)
+    predictions = parser.run(run_data, args.batch_size)
+    uniparse.util.write_predictions_to_file(
+        predictions=predictions,
+        reference_file=args.test,
+        output_file=args.output,
+        vocab=vocab,
     )
 
-    print(">> Wrote predictions to conllu file %s" % out_file)
+    print(">> Wrote predictions to conllu file %s" % args.output)
+
+
+def main():
+    """Set up command line parser."""
+    description = "Script for train/eval/running Kiperwasser and Goldberg (2017)."
+    parser = argparse.ArgumentParser(description=description)
+
+    subparsers = parser.add_subparsers()
+    subparsers.required = True
+
+    for subparsers_func in [get_train_parser, get_eval_model_parser, get_run_parser]:
+        subparsers_func(subparsers)
+
+    # second parameter is unrecognized arguments
+    args, _ = parser.parse_known_args()
+
+    pprint_dict(vars(args))
+
+    args._func(args)
 
 
 if __name__ == "__main__":

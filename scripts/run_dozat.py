@@ -1,4 +1,8 @@
-"""Script for running Dozat and Manning (2017.)"""
+"""
+Script for running Dozat and Manning (2017.)
+
+TODO: Deprecate this. Refer to the pytorch impl.
+"""
 
 import argparse
 

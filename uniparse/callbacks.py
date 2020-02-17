@@ -55,28 +55,15 @@ class TensorboardLoggerCallback(Callback):
 class ModelSaveCallback(Callback):
     """Callback that saves model between epochs."""
 
-    def __init__(self, save_destination, save_after=0, mode="best"):
-        self._modes = {
-            "best": self._best_save,  # save only best models (as evaluated on dev)
-            "epoch": self._epoch_save,  # save model on each epoch
-        }
-
+    def __init__(self, save_destination, save_after=0):
         self.save_destination = save_destination
         self.save_after = save_after
         self.best_uas = -1
         self.best_epoch = -1
 
-        _mode_names = ", ".join(self._modes.keys())
-        assert mode in self._modes, "Mode not found in [%s]" % _mode_names
-
-        self._save_function = self._modes[mode]
-
         print(f"> Saving model to {save_destination} (after step {save_after})")
 
     def on_epoch_end(self, info):
-        self._save_function(info)
-
-    def _best_save(self, info):
         dev_uas = info["dev_uas"]
         global_step = info["global_step"]
 
@@ -88,10 +75,6 @@ class ModelSaveCallback(Callback):
             self.best_epoch = info["epoch"]
             info["model"].save_to_file(self.save_destination)
             print("saved to", self.save_destination)
-
-    def _epoch_save(self, info):
-        outputfile = "%s_%s" % (self.save_destination, info["epoch"])
-        info["model"].save_to_file(outputfile)
 
 
 class Logger:

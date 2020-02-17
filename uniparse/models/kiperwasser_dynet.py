@@ -27,14 +27,13 @@ def Dense(model_parameters, input_dim, hidden_dim, activation, use_bias):
 class DependencyParser(Parser):
     """Kiperwasser and Goldbergs (2016) bilstm parser paper."""
 
-    def __init__(self, vocab, embs):
+    def __init__(self, args, vocab, embs):
         params = dy.ParameterCollection()
 
-        upos_dim = 25
-        word_dim = 100
-        hidden_dim = 100
+        upos_dim = args.upos_dim
+        word_dim = args.word_dim
+        hidden_dim = args.hidden_dim
         bilstm_out = (word_dim + upos_dim) * 2  # 250
-
 
         self.word_count = vocab.vocab_size
         self.upos_count = vocab.upos_size
