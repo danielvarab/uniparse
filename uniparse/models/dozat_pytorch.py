@@ -169,7 +169,7 @@ class DozatManning(nn.Module, Parser):
         s_rel = self.rel_attn(rel_d, rel_h).permute(0, 2, 3, 1)
         # set the scores that exceed the length of each sentence to -inf
         s_arc.masked_fill_(~mask.unsqueeze(1), float('-inf'))
-        parsed_tree = s_arc.max(2)[1].data.numpy()
+        parsed_tree = s_arc.max(2)[1].cpu().data.numpy()
         # parsed_tree = self.decode(s_arc)
 
         targets = target_arcs if target_arcs is not None else parsed_tree
@@ -180,7 +180,7 @@ class DozatManning(nn.Module, Parser):
 
         s_rel = s_rel[batch_idx, modif_idx, targt_idx, :]
         s_rel = s_rel.reshape((batch_size, seq_len, -1))
-        predicted_labels = s_rel.argmax(-1).data.numpy()
+        predicted_labels = s_rel.argmax(-1).cpu().data.numpy()
         return parsed_tree, predicted_labels, s_arc, s_rel
 
     @classmethod

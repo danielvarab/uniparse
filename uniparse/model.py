@@ -177,7 +177,6 @@ class Model:
                 # renew graph
                 backend.renew_cg()
                 words, lemmas, tags, chars = x
-                print(words.shape)
                 gold_arcs, gold_rels = y
 
                 # PAD = 0; ROOT = 1; OOV = 2; UNK = 2
