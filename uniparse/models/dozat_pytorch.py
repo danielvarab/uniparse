@@ -149,7 +149,6 @@ class DozatManning(nn.Module, Parser):
         word_embed, feat_embed = self.embed_dropout(word_embed, feat_embed)
         # concatenate the word and feat representations
         embed = torch.cat((word_embed, feat_embed), dim=-1)
-        print(embed.shape)
 
         x = pack_padded_sequence(embed, lens, True, False)
         x, _ = self.lstm(x)
@@ -176,7 +175,8 @@ class DozatManning(nn.Module, Parser):
 
         batch_idx = np.repeat(np.arange(batch_size), seq_len)
         modif_idx = np.tile(np.arange(seq_len), batch_size)
-        targt_idx = torch.Tensor(targets).long().reshape(-1)
+        # targt_idx = torch.Tensor(targets).long().reshape(-1)
+        targt_idx = targets.reshape(-1)
 
         s_rel = s_rel[batch_idx, modif_idx, targt_idx, :]
         s_rel = s_rel.reshape((batch_size, seq_len, -1))
