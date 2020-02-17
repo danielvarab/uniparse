@@ -191,6 +191,9 @@ class Model:
                 postags = backend.input_tensor(tags, dtype="int")
                 lemmas = backend.input_tensor(lemmas, dtype="int")
 
+                gold_arcs = backend.input_tensor(gold_arcs, dtype="int")
+                gold_rels = backend.input_tensor(gold_rels, dtype="int")
+
                 arc_preds, rel_preds, arc_scores, rel_scores = self._parser(
                     (words, lemmas, postags, gold_arcs, gold_rels, chars)
                 )
