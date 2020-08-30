@@ -1,0 +1,2 @@
+1. drop support for "model" for pytorch and replace with pytorch lightning
+2. simplicy so-called "model". rename it to "trainer".
