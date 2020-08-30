@@ -1,84 +1,49 @@
-import argparse
-
 from uniparse import Vocabulary, Model
 from uniparse.callbacks import TensorboardLoggerCallback, ModelSaveCallback
 from uniparse.models.kiperwasser_dynet import DependencyParser
 
 
-def main():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--train",
-        dest="train",
-        help="Annotated CONLL train file",
-        metavar="FILE",
-        required=True,
-    )
-    parser.add_argument(
-        "--dev",
-        dest="dev",
-        help="Annotated CONLL dev file",
-        metavar="FILE",
-        required=True,
-    )
-    parser.add_argument(
-        "--test",
-        dest="test",
-        help="Annotated CONLL dev test",
-        metavar="FILE",
-        required=True,
-    )
-    parser.add_argument("--epochs", dest="epochs", type=int, default=30)
-    parser.add_argument("--tb_dest", dest="tb_dest")
-    parser.add_argument("--vocab_dest", dest="vocab_dest")
-    parser.add_argument("--model_dest", dest="model_dest", required=True)
-    parser.add_argument(
-        "--embs", dest="embs", help="pre-trained embeddings file name", required=False
-    )
-    parser.add_argument(
-        "--no_update_pretrained_emb",
-        dest="no_update_pretrained_emb",
-        help="don't update the pretrained embeddings during training",
-        default=False,
-        action="store_true",
-    )
-    parser.add_argument("--patience", dest="patience", type=int, default=-1)
-
-    arguments, unknown = parser.parse_known_args()
-
-    n_epochs = arguments.epochs
+def train(
+    train_file: str,
+    validation_file: str,
+    vocab_file: str,
+    model_file: str,
+    patience: int,
+    batch_size: int,
+    epochs: int,
+    tensorboard_dir: str = None,
+    embedding_file: str = None,
+):
 
     vocab = Vocabulary()
-    if arguments.embs:
-        vocab = vocab.fit(arguments.train, arguments.embs)
+    if embedding_file:
+        vocab = vocab.fit(train_file, embedding_file)
         embs = vocab.load_embedding()
         print("shape", embs.shape)
     else:
-        vocab = vocab.fit(arguments.train)
+        vocab = vocab.fit(train_file)
         embs = None
 
     # save vocab for reproducability later
-    if arguments.vocab_dest:
-        print("> saving vocab to", arguments.vocab_dest)
-        vocab.save(arguments.vocab_dest)
+    if vocab_file:
+        print("> saving vocab to", vocab_file)
+        vocab.save(vocab_file)
 
     # prep data
     print(">> Loading in data")
-    training_data = vocab.tokenize_conll(arguments.train)
-    dev_data = vocab.tokenize_conll(arguments.dev)
-    test_data = vocab.tokenize_conll(arguments.test)
+    training_data = vocab.tokenize_conll(train_file)
+    dev_data = vocab.tokenize_conll(validation_file)
 
     # instantiate model
     model = DependencyParser(vocab, embs)
 
     callbacks = []
     tensorboard_logger = None
-    if arguments.tb_dest:
-        tensorboard_logger = TensorboardLoggerCallback(arguments.tb_dest)
+    if tensorboard_dir:
+        tensorboard_logger = TensorboardLoggerCallback(tensorboard_dir)
         callbacks.append(tensorboard_logger)
 
-    save_callback = ModelSaveCallback(arguments.model_dest)
+    save_callback = ModelSaveCallback(model_file)
     callbacks.append(save_callback)
 
     # prep params
@@ -92,29 +57,95 @@ def main():
     )
     parser.train(
         training_data,
-        arguments.dev,
+        validation_file,
         dev_data,
-        epochs=n_epochs,
-        batch_size=32,
+        epochs=epochs,
+        batch_size=batch_size,
         callbacks=callbacks,
-        patience=arguments.patience,
+        patience=patience,
     )
-    parser.load_from_file(arguments.model_dest)
 
-    metrics = parser.evaluate(arguments.test, test_data, batch_size=32)
-    test_UAS = metrics["nopunct_uas"]
-    test_LAS = metrics["nopunct_las"]
 
+def init_train_parser(subparsers):
+    parser = subparsers.add_parser("train")
+    parser.add_argument("--train", required=True)
+    parser.add_argument("--dev", required=True)
+    parser.add_argument("--vocab", required=True)
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--patience", type=int, default=-1)
+    # optionals
+    parser.add_argument("--no_update_pretrained_emb", action="store_true")
+    parser.add_argument("--embs")
+    parser.add_argument("--tensorboard")
+
+    def f():
+        train(
+            train_file=args.train,
+            validation_file=args.dev,
+            vocab_file=args.vocab,
+            model_file=args.model,
+            patience=args.patience,
+            epochs=args.epochs,
+            tensorboard_dir=args.tensorboard,
+            embedding_file=args.embs,
+            batch_size=args.batch_size,
+        )
+
+    parser.set_defaults(func=f)
+
+
+def evaluate(ud_file: str, vocab_file: str, model_file: str, batch_size: int = 32):
+    vocab = Vocabulary().load(vocab_file)
+    model = DependencyParser(vocab, embs=None)
+
+    trainer = Model(
+        model,
+        decoder="eisner",
+        loss="kiperwasser",
+        optimizer="adam",
+        strategy="bucket",
+        vocab=vocab,
+    )
+
+    trainer.load_from_file(model_file)
+    eval_data = vocab.tokenize_conll(ud_file)
+    metrics = trainer.evaluate(ud_file, eval_data, batch_size)
     print(metrics)
 
-    if arguments.tb_dest and tensorboard_logger:
-        tensorboard_logger.raw_write("test_UAS", test_UAS)
-        tensorboard_logger.raw_write("test_LAS", test_LAS)
 
-    print()
-    print(">>> Model maxed on dev at epoch", save_callback.best_epoch)
-    print(">>> Test score:", test_UAS, test_LAS)
+def init_eval_parser(subparsers):
+    parser = subparsers.add_parser("eval")
+    parser.add_argument("--data", required=True)
+    parser.add_argument("--vocab", required=True)
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--batch-size", type=int, default=32)
+
+    def f():
+        evaluate(
+            ud_file=args.data,
+            vocab_file=args.vocab,
+            model_file=args.model,
+            batch_size=args.batch_size,
+        )
+
+    parser.set_defaults(func=f)
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    description = "Script for train/evaluating/running Kiperwasser and Goldberg (2017)"
+    parser = argparse.ArgumentParser(description)
+
+    subparsers = parser.add_subparsers(dest="cmd", help="geagwa")
+    subparsers.required = True
+
+    for init_cmd in [init_train_parser, init_eval_parser]:
+        init_cmd(subparsers)
+
+    args = parser.parse_args()
+
+    args.func()
+
