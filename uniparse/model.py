@@ -228,7 +228,7 @@ class Model:
             print(f">> Completed epoch {epoch} in {int(time.time() - start)} seconds")
 
             no_punct_dev_uas, no_punct_dev_las = None, None
-            if dev_file:
+            if dev_file != None:
                 metrics = self.evaluate(dev_file, dev, batch_size)
                 no_punct_dev_uas = metrics["nopunct_uas"]
                 no_punct_dev_las = metrics["nopunct_las"]

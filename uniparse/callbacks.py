@@ -80,7 +80,7 @@ class ModelSaveCallback(Callback):
         dev_uas = info["dev_uas"]
         global_step = info["global_step"]
 
-        if (dev_uas < self.best_uas) or (global_step < self.save_after):
+        if (dev_uas != None) and (dev_uas < self.best_uas) or (global_step < self.save_after):
             # skipping
             return
         else:
