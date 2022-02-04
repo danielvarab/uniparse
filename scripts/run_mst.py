@@ -111,7 +111,7 @@ def train(
                 print(">> saved to", param_file)
                 max_uas = nopunct_uas
         else:
-            print(">> No dev file, saving model from last epoch (" + str(epoch) + "to " + param_file)
+            print(">> No dev file, saving model from last epoch " + str(epoch) + " to " + param_file)
             np.save(param_file, params.W)
 
     print(">> Finished. Time spent", time.time() - start)
