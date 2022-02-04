@@ -207,6 +207,8 @@ class Vocabulary:
     def tokenize_conll(self, file):
         """Maps string dataset to integer token lookups."""
         # TODO: Rename to load_conllu
+        if file == None:
+            return None
         return self._read_conll(file, tokenize=True)
 
     def _parse_conll_line(self, info, tokenize):

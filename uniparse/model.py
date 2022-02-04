@@ -18,7 +18,7 @@ ERROR_MSG = ">> ERROR: can't import decoders. please run \
 try:
     import uniparse.decoders as decoders
 except Exception as exception:
-    raise ERROR_MSG
+    print( ERROR_MSG)
 
 
 class Model:

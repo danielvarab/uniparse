@@ -97,18 +97,22 @@ def train(
                 step_time = time.time()
                 uas, ras = [], []
 
-        # time to evaluate
-        print(">> Done with epoch %d. Evaluating on dev..." % epoch)
-        _, metrics = evaluate(encoder, params, vocab, dev_data_file, dev_data, epoch)
-        print(">> dev epoch %d" % epoch)
-        print(metrics)
-        print()
+        if dev_data != None:
+            # time to evaluate
+            print(">> Done with epoch %d. Evaluating on dev..." % epoch)
+            _, metrics = evaluate(encoder, params, vocab, dev_data_file, dev_data, epoch)
+            print(">> dev epoch %d" % epoch)
+            print(metrics)
+            print()
 
-        nopunct_uas = metrics["nopunct_uas"]
-        if nopunct_uas > max_uas:
+            nopunct_uas = metrics["nopunct_uas"]
+            if nopunct_uas > max_uas:
+                np.save(param_file, params.W)
+                print(">> saved to", param_file)
+                max_uas = nopunct_uas
+        else:
+            print(">> No dev file, saving model from last epoch (" + str(epoch) + "to " + param_file)
             np.save(param_file, params.W)
-            print(">> saved to", param_file)
-            max_uas = nopunct_uas
 
     print(">> Finished. Time spent", time.time() - start)
 
@@ -116,8 +120,8 @@ def train(
 if __name__ == "__main__":
     ARGPARSER = argparse.ArgumentParser()
     ARGPARSER.add_argument("--train", required=True)
-    ARGPARSER.add_argument("--dev", required=True)
-    ARGPARSER.add_argument("--test", required=True)
+    ARGPARSER.add_argument("--dev", required=False)
+    ARGPARSER.add_argument("--test", required=False)
     ARGPARSER.add_argument("--model", required=True)
 
     ARGUMENTS, UNK = ARGPARSER.parse_known_args()
@@ -140,8 +144,10 @@ if __name__ == "__main__":
     print("> Pre-encoding edges")
     START_TIME = time.time()
     TRAIN = pre_encode(ENCODER, TRAIN, accumulate_vocab=True)
-    DEV = pre_encode(ENCODER, DEV)
-    TEST = pre_encode(ENCODER, TEST)
+    if DEV != None:
+        DEV = pre_encode(ENCODER, DEV)
+    if TEST != None:
+        TEST = pre_encode(ENCODER, TEST)
     print(">> Done pre-encoding edges", time.time() - START_TIME)
 
     # 5m is completely arbitrary but fits all features for PTB.
@@ -154,6 +160,8 @@ if __name__ == "__main__":
     # populate with best parameters
     PARAMS.W = np.load("%s.npy" % MODEL_FILE)
 
-    print(">> Time to evaluate on test set")
-    _, TEST_METRICS = evaluate(ENCODER, PARAMS, VOCAB, TEST_FILE, TEST, "test")
-    print(TEST_METRICS)
+    if TEST != None:
+        print(">> Time to evaluate on test set")
+        _, TEST_METRICS = evaluate(ENCODER, PARAMS, VOCAB, TEST_FILE, TEST, "test")
+        print(TEST_METRICS)
+
