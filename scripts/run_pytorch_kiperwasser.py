@@ -25,14 +25,14 @@ def main():
         dest="dev",
         help="Annotated CONLL dev file",
         metavar="FILE",
-        required=True,
+        required=False,
     )
     parser.add_argument(
         "--test",
         dest="test",
         help="Annotated CONLL dev test",
         metavar="FILE",
-        required=True,
+        required=False,
     )
     parser.add_argument("--decoder", dest="decoder", required=True)
     parser.add_argument("--model", dest="model", required=True)
@@ -55,7 +55,7 @@ def main():
     save_callback = ModelSaveCallback(arguments.model)
 
     # prep params
-    parser = Model(
+    dep_parser = Model(
         model,
         decoder=arguments.decoder,
         loss="hinge",
@@ -64,7 +64,7 @@ def main():
         vocab=vocab,
     )
 
-    parser.train(
+    dep_parser.train(
         training_data,
         arguments.dev,
         dev_data,
@@ -76,11 +76,12 @@ def main():
     # load best model
     model.load_from_file(arguments.model)
 
-    metrics = parser.evaluate(
-        arguments.test, test_data, batch_size=arguments.batch_size
-    )
+    if test_data != None:
+        metrics = dep_parser.evaluate(
+            arguments.test, test_data, batch_size=arguments.batch_size
+        )
 
-    print(metrics)
+        print(metrics)
 
 if __name__ == "__main__":
     main()

@@ -13,12 +13,15 @@ from uniparse.util import write_predictions_to_file
 
 from uniparse.dataprovider import ScaledBatcher, BucketBatcher
 
-ERROR_MSG = ">> ERROR: can't import decoders. please run \
-            'python setup.py build_ext --inplace' from the root directory"
+DECODER_IMPORT_ERROR_MSG = """Can't import decoders. This is probably because the \
+cython implementations haven't been compiled. Compile them by running the following \
+command from the root directory:
+'python setup.py build_ext --inplace'"""
+
 try:
     import uniparse.decoders as decoders
-except Exception as exception:
-    raise ERROR_MSG
+except ModuleNotFoundError as exception:
+    raise ModuleNotFoundError(DECODER_IMPORT_ERROR_MSG)
 
 
 class Model:
@@ -228,7 +231,7 @@ class Model:
             print(f">> Completed epoch {epoch} in {int(time.time() - start)} seconds")
 
             no_punct_dev_uas, no_punct_dev_las = None, None
-            if dev_file:
+            if dev_file != None:
                 metrics = self.evaluate(dev_file, dev, batch_size)
                 no_punct_dev_uas = metrics["nopunct_uas"]
                 no_punct_dev_las = metrics["nopunct_las"]
