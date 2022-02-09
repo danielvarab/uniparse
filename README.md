@@ -136,10 +136,6 @@ python scripts/run_dynet_kiperwasser.py --train TRAIN_FILE --dev DEV_FILE --test
 |                                |  Danish (UD)  | 87.42%       | 84.98%       | 87.84%       | 84.99%      |
 |                                |  English (UD) | 90.74        | 89.01%       | 91.47        | 89.38       |
 |                                | English (PTB) | 94.91%       | 93.70%       | 95.43%       | 94.06%      |
-| Nguyen and Verspoor (2018)     | -             |              |              |              |             |
-|                                |  Danish (UD)  | TBA          | TBA          | TBA          | TBA         |
-|                                |  English (UD) | TBA          | TBA          | TBA          | TBA         |
-|                                | English (PTB) | TBA          | TBA          | TBA          | TBA         |
 | MST (non-neural)               | -             |              |              |              |             |
 |                                |  Danish (UD)  | 67.17        | 55.52        | 68.80        | 55.30       |
 |                                |  English (UD) | 73.47        | 65.20        | 75.55        | 66.25       |
